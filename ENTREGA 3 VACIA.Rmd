@@ -1,0 +1,166 @@
+---
+title: "Análisis del IDH y Calidad Institucional"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(factoextra)
+library(rio)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(cluster)
+library(kableExtra)
+##LIMPIAR LA DATA
+
+data_ori=import("LA REAL REAL DATA .xlsx")
+data_ori <- data_ori %>%
+  mutate(
+   calsijud = as.numeric(calsijud),
+    i.gini = as.numeric(i.gini))
+
+names(data_ori)
+data_ok <- data_ori[complete.cases(data_ori), ]
+
+dontselect=c("paises","region","idh.2022")
+select=setdiff(names(data_ok),dontselect) 
+data_num=data_ok[,select]
+```
+
+{data-width=650}
+-----------------------------------------------------------------------
+
+# Datos de las integrantes y proyecto
+  
+```{r}
+# Mostrar los datos con formato adecuado
+cat("Integrantes:\n")
+cat("--> Silvana Gamarra (20222306)\n", 
+ "--> Ariana Zuazo (20222630)\n\n")
+
+cat("Curso: Estadística para el Análisis Político 2\n")
+cat("Docente: José Magallanes\n")
+cat("Jefa de práctcas: Chiara Zamora\n")
+cat("Año: 2024")
+cat("Proyecto: Cómo la calidad institucional explica el Índice de Desarrollo Humano\n")
+```
+
+
+# DICCIONARIO
+
+```{r}
+# Leer y mostrar la tabla de diccionario
+library(readxl)
+diccionario <- read_excel("DICCIONARIO VARIABLES REAL.xlsx", sheet = 1)
+```
+```{r}
+knitr::kable(diccionario, caption = "Diccionario de Variables")
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+# GRAFICO IDH 
+
+```{r}
+ggplot(data_ok, aes(x = region, y = idh.2022, fill = region)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Diagrama de Caja del Índice de Desarrollo Humano (IDH) por Continente", 
+       x = "Continente", 
+       y = "IDH") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Mejora la legibilidad de los nombres
+
+```
+
+# GRAFICO 2 (CORRELACION)
+
+**MATRIZ DE CORRELACIÓN Y MAPA DE CALOR**:
+
+```{r}
+# Selección de variables numéricas para el análisis de correlación
+cor_data_ok <- data_ok %>%
+  select(calsijud, i.democracia, gob.calidad, i.criminalidad, ipc.2022, PBI.2022, i.gini, i.caphumano)
+
+# Matriz de correlación y mapa de calor
+cor_matrix <- cor(cor_data_ok, use = "complete.obs")
+corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
+
+```
+**IDH VS CADA VARIABLE**:
+```{r}
+# Graficar IDH vs cada variable
+library(ggplot2)
+
+variables <- c("calsijud", "i.democracia", "gob.calidad", "i.criminalidad", "ipc.2022", "PBI.2022", "i.gini", "i.caphumano")
+
+for (var in variables) {
+  # Generar el gráfico y asegurarse de que se imprima
+  p <- ggplot(data_ok, aes_string(x = var, y = "idh.2022")) +
+    geom_point(color = "blue") +
+    geom_smooth(method = "lm", color = "red") +  # Línea de regresión
+    labs(title = paste("Relación entre IDH y", var),
+         x = var,
+         y = "IDH") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  # Usar print para mostrar el gráfico
+  print(p)
+}
+
+```
+
+Row {data-width=650}
+-----------------------------------------------------------------------
+
+# MODELOS DE REGRESION Y CORRELACIÓN
+
+```{r}
+# Calcular correlación entre IDH y otras variables
+idh_correlations <- cor_data_ok %>%
+  summarise(across(.fns = ~cor(., data_ok$idh.2022, use = "complete.obs")))
+
+# Visualización de la tabla de correlaciones
+knitr::kable(idh_correlations, caption = "Correlación del IDH con Otras Variables")
+
+```
+
+```{r}
+# Ajuste de regresión
+modelo_regresion <- lm(idh.2022 ~ calsijud + i.democracia + gob.calidad + 
+                        i.criminalidad + ipc.2022 + PBI.2022 + i.gini + i.caphumano, 
+                        data = data_ok )
+
+# Extraer los coeficientes del modelo
+summary_model <- summary(modelo_regresion)
+coeficientes <- summary_model$coefficients
+
+# Convertir a una tabla bonita con kable
+knitr::kable(coeficientes, 
+             col.names = c("Estimates", "Std. Error", "t Value", "Pr(>|t|)"),
+             caption = "Coeficientes del Modelo de Regresión",
+             format = "markdown")
+```
+
+
+Row {data-width=650}
+-----------------------------------------------------------------------
+
+# MODELOS DE CLUSTERIZACIÓN
+**UTILIZAREMOS AGNES PORQUE ES EL MEJOR**:
+
+
+Row {data-width=650}
+-----------------------------------------------------------------------
+
+# GRAFICOS DE CLUSTERIZACION
+
+**JERARQUIZACIÓN Y ESTRATEGIA AGLOMERATIVA**:
+
